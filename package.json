@@ -1,0 +1,79 @@
+{
+  "name": "npm-template",
+  "version": "1.1.2",
+  "description": "A template repo for npm packages",
+  "keywords": [],
+  "type": "module",
+  "main": "./index.cjs",
+  "module": "./index.js",
+  "unpkg": "./index.min.js",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "require": "./index.cjs"
+    },
+    "./*.js": {
+      "import": "./*.js",
+      "require": "./*.cjs"
+    },
+    "./*.mjs": {
+      "import": "./*.js",
+      "require": "./*.cjs"
+    },
+    "./*.cjs": {
+      "import": "./*.js",
+      "require": "./*.cjs"
+    },
+    "./*": {
+      "import": "./*.js",
+      "require": "./*.cjs"
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": false,
+  "scripts": {
+    "test": "npm run lint:js && npm run run:tests",
+    "preversion": "npm test && npm run build",
+    "prepare": "npm test && npm run build",
+    "lint:js": "eslint .",
+    "fix:js": "eslint . --fix",
+    "build": "npm run build:js",
+    "run:tests": "node --test",
+    "clean": "rm -f ./*.cjs",
+    "build:js": "npm run clean && rollup -c rollup.config.js",
+    "create:lock": "npm i --package-lock-only --ignore-scripts --no-audit --no-fund",
+    "version:bump": "npm run version:bump:patch",
+    "version:bump:patch": "npm version --no-git-tag-version patch && npm run create:lock",
+    "version:bump:minor": "npm version --no-git-tag-version minor && npm run create:lock",
+    "version:bump:major": "npm version --no-git-tag-version major && npm run create:lock"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shgysk8zer0/npm-template.git"
+  },
+  "author": "Chris Zuber <admin@kernvalley.us>",
+  "license": "MIT",
+  "funding": [
+    {
+      "type": "librepay",
+      "url": "https://liberapay.com/shgysk8zer0"
+    },
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/shgysk8zer0"
+    }
+  ],
+  "bugs": {
+    "url": "https://github.com/shgysk8zer0/npm-template/issues"
+  },
+  "homepage": "https://github.com/shgysk8zer0/npm-template#readme",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@shgysk8zer0/eslint-config": "^1.0.4",
+    "eslint": "^9.30.1",
+    "rollup": "^4.44.2"
+  }
+}
