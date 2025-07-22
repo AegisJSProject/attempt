@@ -4,6 +4,7 @@ import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail 
 import {
 	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded,
 	failed, isAttemptResult, getResultError, getResultValue, handleResultAsync, handleResultSync, throwIfFailed,
+	getAttemptStatus, SUCCEEDED, FAILED,
 } from './attempt.js';
 
 describe('Test `attempt` library', async () => {
@@ -31,17 +32,22 @@ describe('Test `attempt` library', async () => {
 
 	test('Verify valid results/tuples', { signal }, () => {
 		const good = succeed(true);
-		const bad = fail('forced failure.');
+		const bad = fail(new Error('forced failure.'));
 
 		ok(isAttemptResult(good), 'Should return a frozen tuple with a hidden status.');
 		ok(succeeded(good), 'Should be a valid result with a successful status.');
 		ok(failed(bad), 'Should be a valid result with a failed status.');
 		ok(getResultValue(good), 'Should return the value given by a successful attempt.');
 		ok(getResultError(bad) instanceof Error, 'Should return the error of a failed attempt.');
-		strictEqual(getResultValue(bad), null, 'Failed attempts should have a `null` result value.');
-		strictEqual(getResultError(good), null, 'Successful attempts should have a `null` result error.');
+		throws(() => getResultValue(bad), 'Failed attempts  throw TypeError when attempting to get value.');
+		throws(() => getResultError(good), 'Successful attempts throw TypeError when attempting to get error.');
+		ok(failed(fail(null)), 'Should be a valid result with a failed status when passing `null` to `fail()`.');
 		strictEqual(succeed(good), good, 'Duplicate `succeed()`/`fail()` on results should return original value.');
 		strictEqual(fail(bad), bad, 'Duplicate `succeed()`/`fail()` on results should return original value.');
+
+		if (succeeded(good)) {
+			console.log(getResultValue(good));
+		}
 	});
 
 	test('Test forced succeed/fail returns', { signal }, () => {
@@ -100,28 +106,37 @@ describe('Test `attempt` library', async () => {
 	});
 
 	test('Test asynchronously handling results', { signal }, async () => {
-		const result = succeed('Successful results should be handled by `success` handler.');
-		const err = fail(new Error('Failed results should be handled by `failure` handler.'));
+		const result = succeed('Success.');
+		const err = fail(new Error('Failure.'));
 
 		rejects(async () => throwIfFailed(await handleResultAsync(['invlid'], {})));
 		throws(() => throwIfFailed(err), 'Failed result should throw its error.');
 
-		throwIfFailed(await handleResultAsync(result, {
+		throwIfFailed(handleResultAsync(result, {
 			failure: failTest,
 		}));
 
 
-		throwIfFailed(await handleResultAsync(err, {
+		throwIfFailed(handleResultAsync(err, {
 			success: () => failTest('Failed test triggered success branch of handler.'),
-			failure: console.info,
+			failure: () => null,
 		}));
 
 		rejects(async () => throwIfFailed(await handleResultAsync(err, {})), 'Default error handle should return an `AttemptFailure`.');
 	});
 
-	test('Test synchronously handling results', { signal }, () => {
+	test('Test result status', { signal }, () => {
 		const result = succeed('Successful results should be handled by `success` handler.');
-		const err = fail(new Error('Failed results should be handled by `failure` handler.'));
+		const err = fail(new TypeError('Failed results should be handled by `failure` handler.'));
+
+		strictEqual(getAttemptStatus(result), SUCCEEDED, 'Result should have a status of `SUCCEEDED`.');
+		strictEqual(getAttemptStatus(err), FAILED, 'Result should have a status of `FAILED`.');
+		throws(() => getAttemptStatus('invalid'), 'Invalid results should throw a TypeError.');
+	});
+
+	test('Test synchronously handling results', { signal }, async () => {
+		const result = succeed('Successful results should be handled by `success` handler.');
+		const err = fail(new TypeError('Failed results should be handled by `failure` handler.'));
 
 		throws(() => throwIfFailed(handleResultSync(['invalid'])));
 
