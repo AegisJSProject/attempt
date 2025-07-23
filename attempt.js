@@ -318,12 +318,17 @@ export async function handleResultAsync(result, {
 	success = _successHandler,
 	failure = _failHandler,
 }) {
-	if (succeeded(result)) {
-		return await attemptAsync(success, getResultValue(result));
-	} else if (failed(result)) {
-		return await attemptAsync(failure, getResultError(result));
+	if (!isAttemptResult(result)) {
+		throw new TypeError('Result must be an `AttemptResult` tuple.');
+	} else if (typeof success !== 'function' || typeof failure !== 'function') {
+		throw new TypeError('Both success and failure handlers must be functions.');
 	} else {
-		return fail(new TypeError('Result must be an `AttemptResult` tuple.'));
+		switch (getAttemptStatus(result)) {
+			case ATTEMPT_STATUSES.succeeded:
+				return await attemptAsync(success, getResultValue(result));
+			case ATTEMPT_STATUSES.failed:
+				return await attemptAsync(failure, getResultError(result));
+		}
 	}
 }
 
@@ -352,12 +357,17 @@ export function handleResultSync(result, {
 	success = _successHandler,
 	failure = _failHandler,
 }) {
-	if (succeeded(result)) {
-		return attemptSync(success, getResultValue(result));
-	} else if (failed(result)) {
-		return attemptSync(failure, getResultError(result));
+	if (!isAttemptResult(result)) {
+		throw new TypeError('Result must be an `AttemptResult` tuple.');
+	} else if (typeof success !== 'function' || typeof failure !== 'function') {
+		throw new TypeError('Both success and failure handlers must be functions.');
 	} else {
-		return fail(new TypeError('Result must be an `AttemptResult` tuple.'));
+		switch (getAttemptStatus(result)) {
+			case ATTEMPT_STATUSES.succeeded:
+				return attemptSync(success, getResultValue(result));
+			case ATTEMPT_STATUSES.failed:
+				return attemptSync(failure, getResultError(result));
+		}
 	}
 }
 
