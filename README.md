@@ -82,9 +82,9 @@ npm i @aegisjsproject/attempt
 | **`isAttemptResult(result)`**                         | Checks is a value is a valid `[value, error]` tuple as created by `succeed()` or `fail()`.           |
 | **`succeeded(result)`**                               | Checks is a value is a valid `[value, null]` tuple as created by `succeed()`.                        |
 | **`failed(result)`**                                  | Checks is a value is a valid `[null, error]` tuple as created by `fail()`.                           |
-| **`getResultValue(result)`**                          | Gets the `AttemptResult` value if successful or `null` otherwise.                                    |
-| **`getResultError(result)`**                          | Gets the `AttemptResult` error if failed or `null` otherwise.                                        |
-| **`handleResultAsync(result, { success, failure })`** | Handles an `AttemptResult` asynchronously by invoking the appropriatecallback.                       |
+| **`getResultValue(result)`**                          | Gets the `AttemptResult` value of a successful result.                                               |
+| **`getResultError(result)`**                          | Gets the `AttemptResult` error of a failed result.                                                   |
+| **`handleResultAsync(result, { success, failure })`** | Handles an `AttemptResult` asynchronously by invoking the appropriate callback.                      |
 | **`handleResultSync(result, { success, failure })`**  | Handles an `AttemptResult` synchronously by invoking the appropriate callback.                       |
 | **`throwIfFailed(result)`**                           | Handle errors the typical `try/catch` way by throwing the error in an `AttemptFailure`.              |
 
@@ -94,6 +94,31 @@ This library requires [Promise.try()](https://developer.mozilla.org/en-US/docs/W
 As of July of 2025, it has > 80% support, and polyfills are simple and readily available.
 
 ## Usage Examples
+
+### As an `AttemptResult`
+
+For best type safety, `@aegisjsproject/attempt` can deal with results directly, with methods for checking
+result status, extracting values/errors from a result, etc.
+
+```js
+import { succeed, fail, succeeded, failed, getResultValue, getResultError } from '@aegisjsproject/attempt';
+
+const result = Math.random() < 0.5 ? succeed('That number is ok') : fail(new RangeError('Number was too small'));
+
+if (succeeded(result)) {
+  const msg = getResultValue(result);
+  // Handle result value
+} else if (failed(result)) {
+  // could just be an `else` but IDEs do better using `failed` as it ensures it's an `AttemptFailure`
+  const err = getResultError(result);
+  // Handle result error
+}
+```
+
+### With desctructuring of `[val, err]`
+
+Since an `AttemptResult` is a frozen tuple of `[val, err]`, you also have the option to just destructure
+it and handle results in what may be a more familiar or convenient way.
 
 ```js
 import { attemptAsync, createSafeSyncCallback, createSafeAsyncCallback } from '@aegisjsproject/attempt';
