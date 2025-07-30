@@ -62,7 +62,7 @@ npm i @aegisjsproject/attempt
 <script type="importmap">
   {
     "imports": {
-      "@aegisjsproject/attempt": "https://unpkg.com/@aegisjsproject/attempt@1.0.0/attempt.min.js"
+      "@aegisjsproject/attempt": "https://unpkg.com/@aegisjsproject/attempt@1.0.3/attempt.min.js"
     }
   }
 </script>
@@ -87,6 +87,7 @@ npm i @aegisjsproject/attempt
 | **`handleResultAsync(result, { success, failure })`** | Handles an `AttemptResult` asynchronously by invoking the appropriate callback.                      |
 | **`handleResultSync(result, { success, failure })`**  | Handles an `AttemptResult` synchronously by invoking the appropriate callback.                       |
 | **`throwIfFailed(result)`**                           | Handle errors the typical `try/catch` way by throwing the error in an `AttemptFailure`.              |
+| **`attemptAll(...callbacks)`**                        | Attempts to execute multiple callbacks sequentially, passing the result of each callback to the next.|
 
 ## Requirements
 
@@ -149,4 +150,20 @@ safeParse('{Invalid JSON}');
 const [value, error] = await attemptAsync(fetch, '/api', { signal: AbortSignal.abort('Request cancelled') });
 if (error) { … }           // always an Error instance
 else       { …value… }     // may be any value (even null/undefined)
+```
+
+### Using `attemptAll()`
+
+```js
+import { attemptAll } from '@aegisjsproject/attempt';
+
+const [sri] = await attemptAll(
+  () => import('node:fs/promises'),
+  fs => fs.readFile('/path/to/file.txt', 'utf8'),
+  text => new TextEncoder().encode(text),
+  encoded => crypto.subtle.digest('SHA-256', encoded),
+  hash => new Uint8Array(hash),
+  bytes => bytes.toBase64(),
+  hash => `sha256-${hash}`
+);
 ```

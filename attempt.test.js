@@ -4,7 +4,7 @@ import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail 
 import {
 	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded,
 	failed, isAttemptResult, getResultError, getResultValue, handleResultAsync, handleResultSync, throwIfFailed,
-	getAttemptStatus, SUCCEEDED, FAILED,
+	getAttemptStatus, SUCCEEDED, FAILED, attemptAll,
 } from './attempt.js';
 
 describe('Test `attempt` library', async () => {
@@ -33,7 +33,9 @@ describe('Test `attempt` library', async () => {
 	test('Verify valid results/tuples', { signal }, () => {
 		const good = succeed(true);
 		const bad = fail(new Error('forced failure.'));
+		const invalid = fail(['Invalid', 'error']);
 
+		deepStrictEqual(getResultError(invalid), new TypeError('Invalid error type provided.'), 'Should return a TypeError for invalid error types.');
 		ok(isAttemptResult(good), 'Should return a frozen tuple with a hidden status.');
 		ok(succeeded(good), 'Should be a valid result with a successful status.');
 		ok(failed(bad), 'Should be a valid result with a failed status.');
@@ -104,7 +106,12 @@ describe('Test `attempt` library', async () => {
 	test('Test asynchronously handling results', { signal }, async () => {
 		const result = succeed('Success.');
 		const err = fail(new Error('Failure.'));
+		const aborted = await handleResultAsync(result, { signal: AbortSignal.abort('Aborted')	});
+		const notAborted = await handleResultAsync(result, { signal });
 
+		ok(failed(aborted), 'Aborted results should be considered failed.');
+		ok(succeeded(notAborted), 'Not aborted results should be considered successful.');
+		ok(getResultError(aborted) instanceof Error, 'Aborted results should have an error.');
 		rejects(() => handleResultAsync(['invlid'], {}));
 		rejects(() => handleResultAsync(result, { success: null }), 'Invalid success callback should throw a TypeError.');
 		rejects(() => handleResultAsync(result, { failure: null }), 'Invalid failuer callback should throw a TypeError.');
@@ -113,6 +120,8 @@ describe('Test `attempt` library', async () => {
 		throwIfFailed(handleResultAsync(result, {
 			failure: failTest,
 		}));
+
+		throwIfFailed(handleResultAsync(result, { signal: AbortSignal.timeout(500) }), 'Should not throw if result is successful and signal is not aborted.');
 
 
 		throwIfFailed(handleResultAsync(err, {
@@ -127,7 +136,7 @@ describe('Test `attempt` library', async () => {
 		const result = succeed('Successful results should be handled by `success` handler.');
 		const err = fail(new TypeError('Failed results should be handled by `failure` handler.'));
 
-		throws(() => handleResultSync(['invalid']));
+		throws(() => handleResultSync(['invalid']), 'Invalid results should throw a TypeError.');
 		throws(() => handleResultSync(result, { success: null }), 'Invalid success callback should throw a TypeError.');
 		throws(() => handleResultSync(result, { failure: null }), 'Invalid failuer callback should throw a TypeError.');
 
@@ -137,7 +146,7 @@ describe('Test `attempt` library', async () => {
 
 		throwIfFailed(handleResultSync(err, {
 			success: () => failTest('Failed test triggered success branch of handler.'),
-			failure: console.info,
+			failure: () => null,
 		}));
 	});
 
@@ -148,5 +157,29 @@ describe('Test `attempt` library', async () => {
 		strictEqual(getAttemptStatus(result), SUCCEEDED, 'Result should have a status of `SUCCEEDED`.');
 		strictEqual(getAttemptStatus(err), FAILED, 'Result should have a status of `FAILED`.');
 		throws(() => getAttemptStatus('invalid'), 'Invalid results should throw a TypeError.');
+	});
+
+	test('Test `attemptAll()`', { signal }, async () => {
+		const [val] = await attemptAll(
+			() => 'Hello, World!',
+			text => new TextEncoder().encode(text),
+			encoded => crypto.subtle.digest('SHA-256', encoded),
+			hash => new Uint8Array(hash),
+			bytes => bytes.toBase64(),
+		);
+
+		let didFail = false;
+
+		const result = await attemptAll(
+			() => 'Hello, World!',
+			() => {throw new Error('Forced error.');},
+			() => didFail = true,
+			() => 'This should not be reached.',
+		);
+
+		strictEqual(val, '3/1gIbsr1bCvZ2KQgJ7DpTGR3YHH9wpLKGiKNiGCmG8=', 'Should return the expected base64-encoded string.');
+		rejects(() => attemptAll('Not a function'), 'Should throw if any callback is not a function.');
+		ok(failed(result), 'Should return a failed result if any callback throws an error.');
+		ok(! didFail, 'Should not reach the last callback if an error is thrown in a previous callback.');
 	});
 });
