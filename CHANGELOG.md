@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.3] - 2025-07-30
+
+### Added
+- Added `attemptAll` function to execute multiple callbacks sequentially, passing the result of each callback to the next.
+- Add support for `AbortSignal`s in `handleResultAsync`
+
 ## [v1.0.2] - 2025-07-23
 
 ### Changed

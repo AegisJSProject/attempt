@@ -306,22 +306,27 @@ export const createSafeSyncCallback = callback => (...args) => attemptSync(callb
  * @template E
  * @template U
  * @template V
+ * @template R
  * @param {AttemptResult<T, E>} result The result to handle.
  * @param {{
  *   success?: (value: T) => U | PromiseLike<U>,
  *   failure?: (err: E) => V | PromiseLike<V>
+ * 	 signal?: AbortSignal<R>
  * }} callbacks Handlers for success or failure cases.
- * @returns {Promise<AttemptResult<Awaited<U>|Awaited<V>, E>>} A Promise resolving to a new `AttemptResult` from the callback execution,
+ * @returns {Promise<AttemptResult<Awaited<U>|Awaited<V>, E>|AttemptFailure<R>} A Promise resolving to a new `AttemptResult` from the callback execution,
  * or a failure if the input is invalid.
  */
 export async function handleResultAsync(result, {
 	success = _successHandler,
 	failure = _failHandler,
+	signal,
 }) {
-	if (!isAttemptResult(result)) {
+	if (! isAttemptResult(result)) {
 		throw new TypeError('Result must be an `AttemptResult` tuple.');
 	} else if (typeof success !== 'function' || typeof failure !== 'function') {
 		throw new TypeError('Both success and failure handlers must be functions.');
+	} else if (signal instanceof AbortSignal && signal.aborted) {
+		return fail(signal.reason instanceof Error ? signal.reason : new Error(signal.reason));
 	} else {
 		switch (getAttemptStatus(result)) {
 			case ATTEMPT_STATUSES.succeeded:
@@ -372,9 +377,32 @@ export function handleResultSync(result, {
 }
 
 /**
+ * Attempts to execute multiple callbacks sequentially, passing the result of each callback to the next.
+ *
+ * @param  {...Function} callbacks
+ * @returns {Promise<AttemptSuccess<any>|AttemptFailure<AnyError>>}
+ */
+export async function attemptAll(...callbacks) {
+	if (callbacks.some(cb => typeof cb !== 'function')) {
+		throw new TypeError('All callbacks must be functions.');
+	} else {
+		let result = succeed(null);
+
+		for (const cb of callbacks) {
+			if (result[ATTEMPT_STATUS] === ATTEMPT_STATUSES.failed) {
+				break;
+			} else {
+				result = await attemptAsync(cb, result[VALUE_INDEX]);
+			}
+		}
+
+		return result;
+	}
+}
+
+/**
  * Throws the error if `result` is an `AttemptFailure`.
  *
- * @template E
  * @param {AttemptResult<any, AnyError>} result The result tuple
  * @throws {AnyError} The error if result is an `AttemptFailure`
  */
