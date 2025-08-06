@@ -5,6 +5,7 @@ import {
 	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded,
 	failed, isAttemptResult, getResultError, getResultValue, handleResultAsync, handleResultSync, throwIfFailed,
 	getAttemptStatus, SUCCEEDED, FAILED, attemptAll,
+	AttemptResult,
 } from './attempt.js';
 
 describe('Test `attempt` library', async () => {
@@ -46,6 +47,8 @@ describe('Test `attempt` library', async () => {
 		ok(failed(fail(null)), 'Should be a valid result with a failed status when passing `null` to `fail()`.');
 		strictEqual(succeed(good), good, 'Duplicate `succeed()`/`fail()` on results should return original value.');
 		strictEqual(fail(bad), bad, 'Duplicate `succeed()`/`fail()` on results should return original value.');
+		throws(() => new AttemptResult('val', new Error('Oops')), 'Should not be able to create a plain `AttemptResult`.');
+		throws(() => fail(signal), 'Failing with an unaborted signal as the reason should throw a `TypeError`.');
 	});
 
 	test('Test forced succeed/fail returns', { signal }, () => {
@@ -153,7 +156,10 @@ describe('Test `attempt` library', async () => {
 	test('Test result status', { signal }, () => {
 		const result = succeed('Successful results should be handled by `success` handler.');
 		const err = fail(new TypeError('Failed results should be handled by `failure` handler.'));
-
+		const aborted = AbortSignal.abort();
+		const abortedResult = fail(aborted);
+		strictEqual(getResultError(abortedResult), aborted.reason, 'Aborted signals should have an error result with the reason.');
+		console.log({ status: result.status, SUCCEEDED, FAILED, val: getAttemptStatus(result) });
 		strictEqual(getAttemptStatus(result), SUCCEEDED, 'Result should have a status of `SUCCEEDED`.');
 		strictEqual(getAttemptStatus(err), FAILED, 'Result should have a status of `FAILED`.');
 		throws(() => getAttemptStatus('invalid'), 'Invalid results should throw a TypeError.');
