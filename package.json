@@ -1,6 +1,6 @@
 {
   "name": "@aegisjsproject/attempt",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Run synchronous and asynchronous code without throwing errors",
   "keywords": [
     "try",

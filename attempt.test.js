@@ -4,7 +4,7 @@ import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail 
 import {
 	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded,
 	failed, isAttemptResult, getResultError, getResultValue, handleResultAsync, handleResultSync, throwIfFailed,
-	getAttemptStatus, SUCCEEDED, FAILED, attemptAll,
+	getAttemptStatus, SUCCEEDED, FAILED, attemptAll, AttemptSuccess, AttemptFailure,
 } from './attempt.js';
 
 describe('Test `attempt` library', async () => {
@@ -31,10 +31,16 @@ describe('Test `attempt` library', async () => {
 	});
 
 	test('Verify valid results/tuples', { signal }, () => {
+		const sig = AbortSignal.abort();
 		const good = succeed(true);
 		const bad = fail(new Error('forced failure.'));
 		const invalid = fail(['Invalid', 'error']);
+		const unaborted = fail(signal);
+		const aborted = fail(sig);
+		const abortedStr = fail(AbortSignal.abort('failed'));
 
+		ok(good instanceof AttemptSuccess, '`succeed()` should return an `AttemptSuccess` object/tuple.');
+		ok(bad instanceof AttemptFailure, '`fail()` should return an `AttemptFailure` object/tuple.');
 		deepStrictEqual(getResultError(invalid), new TypeError('Invalid error type provided.'), 'Should return a TypeError for invalid error types.');
 		ok(isAttemptResult(good), 'Should return a frozen tuple with a hidden status.');
 		ok(succeeded(good), 'Should be a valid result with a successful status.');
@@ -46,14 +52,20 @@ describe('Test `attempt` library', async () => {
 		ok(failed(fail(null)), 'Should be a valid result with a failed status when passing `null` to `fail()`.');
 		strictEqual(succeed(good), good, 'Duplicate `succeed()`/`fail()` on results should return original value.');
 		strictEqual(fail(bad), bad, 'Duplicate `succeed()`/`fail()` on results should return original value.');
+		deepStrictEqual(aborted.error, sig.reason, 'Failures from aborted `AbortSignal`s should have an error of the signal\'s reason.');
+		ok(unaborted.error instanceof TypeError, 'Failing with an unaborted `AbortSignal` should fail with a `TypeError`.');
+		ok(abortedStr.error instanceof Error, 'Failing with an `AbortSignal` with a string `reason` should fail an `Error` with that message.');
+		deepStrictEqual(good, succeed(good), 'Creating an AttemptResult from a prior result should just return the original.');
 	});
 
 	test('Test forced succeed/fail returns', { signal }, () => {
-		const [result1, err1] = succeed('This should succeed.');
+		// Checks object destructuring
+		const { value, error } = succeed('This should succeed.');
+		// Checks tuple destructuring
 		const [result2, err2] = fail('This should error.');
 
-		strictEqual(result1, 'This should succeed.', '`succeed()` should have the expected result.');
-		strictEqual(err1, null, '`succeed()` should not return an error.');
+		strictEqual(value, 'This should succeed.', '`succeed()` should have the expected result.');
+		strictEqual(error, null, '`succeed()` should not return an error.');
 		strictEqual(result2, null, '`fail()` should not return a result.');
 		ok(err2 instanceof Error, '`fail()` should return an error.');
 	});

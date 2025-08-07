@@ -10,9 +10,10 @@ const VALUE_INDEX = 0;
 
 const ERROR_INDEX = 1;
 
+export const NONE = null;
+
 export const SUCCEEDED = Symbol('attempt:status:succeeded');
 export const FAILED = Symbol('attempt:status:failed');
-
 
 /**
  * Returns the status of an attempt result.
@@ -26,35 +27,8 @@ export const ATTEMPT_STATUSES = Object.freeze({
 });
 
 /**
- * Gets the status of an attempt result.
- *
- * @param {AttemptResult} result The result to check.
- * @returns {ATTEMPT_STATUSES.succeeded|ATTEMPT_STATUSES.failed}
- * @throws {TypeError} If the result is not an `AttemptResult`.
- */
-export function getAttemptStatus(result) {
-	if (isAttemptResult(result)) {
-		return result[ATTEMPT_STATUS];
-	} else {
-		throw new TypeError('Result must be an `AttemptResult` tuple.');
-	}
-}
-
-/**
  * Union of all error types.
  * @typedef {Error|DOMException|TypeError|RangeError|AggregateError|ReferenceError|EvalError|URIError|SyntaxError} AnyError
- */
-
-/**
- * @template T
- * @typedef {readonly [T, null] & { [ATTEMPT_STATUS]: typeof ATTEMPT_STATUSES.succeeded }} AttemptSuccess
- * Represents a successful outcome tuple with hidden metadata.
- */
-
-/**
- * @template E
- * @typedef {readonly [null, E] & { [ATTEMPT_STATUS]: typeof ATTEMPT_STATUSES.failed }} AttemptFailure
- * Represents a failed outcome tuple with hidden metadata.
  */
 
 /**
@@ -63,43 +37,100 @@ export function getAttemptStatus(result) {
  * @typedef {AttemptSuccess<T> | AttemptFailure<E>} AttemptResult<T, E>
  * Union type for both possible attempt outcomes.
  */
+class ResultTuple extends Array {
+	/**
+	 * @param {T} value
+	 * @param {E} error
+	 * @param {SUCCEEDED|FAILED} status
+	 */
+	constructor(value, error, status) {
+		super(value, error);
+		Object.defineProperty(this, ATTEMPT_STATUS, {
+			value: status,
+			writable: false,
+			enumerable: false,
+			configurable: false,
+		});
 
-/**
- * Attach a hidden status symbol and freeze the result.
- *
- * @template T
- * @param {T} value A tuple to tag with metadata.
- * @param {symbol} status Internal status symbol.
- * @returns {readonly T & { [ATTEMPT_STATUS]: symbol }} The frozen and tagged tuple.
- * @private
- */
-function _createResult(value, status) {
-	Object.defineProperty(value, ATTEMPT_STATUS, {
-		value: status,
-		writable: false,
-		enumerable: false,
-		configurable: false,
-	});
+		Object.freeze(this);
+	}
 
-	return Object.freeze(value);
+	/**
+	 * @returns {Error|NONE}
+	 */
+	get error() {
+		return this[ERROR_INDEX];
+	}
+
+	/**
+	 * @returns {SUCCEEDED|FAILED}
+	 */
+	get status() {
+		return this[ATTEMPT_STATUS];
+	}
+
+	/**
+	 * @returns {T}
+	 */
+	get value() {
+		return this[VALUE_INDEX];
+	}
+
+	/**
+	 * @returns {typeof SUCCEEDED}
+	 */
+	static get SUCCEEDED() {
+		return SUCCEEDED;
+	}
+
+	/**
+	 * @returns {typeof FAILED}
+	 */
+	static get FAILED() {
+		return FAILED;
+	}
 }
 
 /**
  * @template T
- * @param {AttemptSuccess<T>} result
- * @returns {T}
+ * @typedef {readonly [T, NONE] & { [ATTEMPT_STATUS]: typeof ATTEMPT_STATUSES.succeeded, value: T, error: NONE, status: typeof ATTEMPT_STATUSES.succeeded }} AttemptSuccess
+ * Represents a successful outcome tuple with hidden metadata. Named differently in class to avoid JSDocs confusion.
  */
-function _extractValue(result) {
-	return result[VALUE_INDEX];
+class SuccessTuple extends ResultTuple {
+	/**
+	 *
+	 * @param {T} value
+	 */
+	constructor(value) {
+		super(value, NONE, ResultTuple.SUCCEEDED);
+	}
 }
 
 /**
  * @template E
- * @param {AttemptFailure<E>} result
- * @returns {E}
+ * * @typedef {readonly [NONE, E] & { [ATTEMPT_STATUS]: typeof ATTEMPT_STATUSES.failed, value: NONE, error: E, status: typeof ATTEMPT_STATUSES.failed }} AttemptFailure
+ * Represents a failed outcome tuple with hidden metadata. Named differently in class to avoid JSDocs confusion.
  */
-function _extractError(result) {
-	return result[ERROR_INDEX];
+class FailureTuple extends ResultTuple {
+	/**
+	 *
+	 * @param {E} error
+	 */
+	constructor(error) {
+		if (typeof error === 'string') {
+			super(NONE, new Error(error), ResultTuple.FAILED);
+		} else if (Error.isError(error)) {
+			super(NONE, error, ResultTuple.FAILED);
+		} else if (! (error instanceof AbortSignal)) {
+			super(NONE, new TypeError('Invalid error type provided.'), ResultTuple.FAILED);
+		} else if (! error.aborted) {
+			super(NONE, new TypeError('Failed with a non-aborted `AbortSignal`.'), ResultTuple.FAILED);
+		} else if (typeof error.reason === 'string') {
+			super(NONE, new Error(error.reason), ResultTuple.FAILED);
+		} else {
+			super(NONE, error.reason, ResultTuple.FAILED);
+		}
+	}
 }
 
 /**
@@ -124,7 +155,7 @@ const _failHandler = err => {
  * @param {unknown} result The value to check.
  * @returns {result is AttemptResult}
  */
-export const isAttemptResult = result => Array.isArray(result) && Object.hasOwn(result, ATTEMPT_STATUS);
+export const isAttemptResult = result => result instanceof ResultTuple;
 
 /**
  * Returns `true` if the given result is a successful AttemptResult.
@@ -132,7 +163,7 @@ export const isAttemptResult = result => Array.isArray(result) && Object.hasOwn(
  * @param {unknown} result
  * @returns {result is AttemptSuccess}
  */
-export const succeeded = result => isAttemptResult(result) && result[ATTEMPT_STATUS] === ATTEMPT_STATUSES.succeeded;
+export const succeeded = result => result instanceof SuccessTuple;
 
 /**
  * Returns `true` if the given result is a failed AttemptResult.
@@ -140,7 +171,7 @@ export const succeeded = result => isAttemptResult(result) && result[ATTEMPT_STA
  * @param {unknown} result
  * @returns {result is AttemptFailure<AnyError>}
  */
-export const failed = result => isAttemptResult(result) && result[ATTEMPT_STATUS] === ATTEMPT_STATUSES.failed;
+export const failed = result => result instanceof FailureTuple;
 
 /**
  * Creates an `AttemptSuccess`
@@ -149,7 +180,7 @@ export const failed = result => isAttemptResult(result) && result[ATTEMPT_STATUS
  * @param {T} value
  * @returns {AttemptSuccess<T>}
  */
-export const succeed = value => isAttemptResult(value) ? value : _createResult([value, null], ATTEMPT_STATUSES.succeeded);
+export const succeed = value => isAttemptResult(value) ? value : new SuccessTuple(value);
 
 /**
  * @overload
@@ -174,14 +205,10 @@ export const succeed = value => isAttemptResult(value) ? value : _createResult([
  * @returns {AttemptFailure<AnyError>}
  */
 export function fail(err) {
-	if (isAttemptResult(err)) {
+	if (err instanceof ResultTuple) {
 		return err;
-	} else if (Error.isError(err)) {
-		return _createResult([null, err], ATTEMPT_STATUSES.failed);
-	} else if (typeof err === 'string') {
-		return _createResult([null, new Error(err)], ATTEMPT_STATUSES.failed);
 	} else {
-		return _createResult([null, new TypeError('Invalid error type provided.')], ATTEMPT_STATUSES.failed);
+		return new FailureTuple(err);
 	}
 }
 
@@ -194,8 +221,8 @@ export function fail(err) {
  * @throws {TypeError} If the result is not a successful `AttemptSuccess`.
  */
 export function getResultValue(result) {
-	if (succeeded(result)) {
-		return _extractValue(result);
+	if (result instanceof SuccessTuple) {
+		return result.value;
 	} else {
 		throw new TypeError('Result must be an `AttemptSuccess` tuple.');
 	}
@@ -210,10 +237,25 @@ export function getResultValue(result) {
  * @throws {TypeError} If the result is not a failed `AttemptFailure`.
  */
 export function getResultError(result) {
-	if (failed(result)){
-		return _extractError(result);
+	if (result instanceof FailureTuple){
+		return result.error;
 	} else {
 		throw new TypeError('Result must be an `AttemptFailure` tuple.');
+	}
+}
+
+/**
+ * Gets the status of an attempt result.
+ *
+ * @param {AttemptResult} result The result to check.
+ * @returns {ATTEMPT_STATUSES.succeeded|ATTEMPT_STATUSES.failed}
+ * @throws {TypeError} If the result is not an `AttemptResult`.
+ */
+export function getAttemptStatus(result) {
+	if (result instanceof ResultTuple) {
+		return result.status;
+	} else {
+		throw new TypeError('Result must be an `AttemptResult` tuple.');
 	}
 }
 
@@ -226,9 +268,9 @@ export function getResultError(result) {
  * @template T
  * @param {(...any) => T | PromiseLike<T>} callback The function to execute. It can be synchronous or return a Promise.
  * @param {(...any)} args Arguments to pass to the callback function.
- * @returns {Promise<AttemptResult<Awaited<T>|null, AnyError|null>>} A Promise that resolves to a tuple:
- * - `[result, null]` on success, where `result` is the resolved value of `T`.
- * - `[null, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
+ * @returns {Promise<AttemptResult<Awaited<T>|NONE, AnyError|NONE>>} A Promise that resolves to a tuple:
+ * - `[result, NONE]` on success, where `result` is the resolved value of `T`.
+ * - `[NONE, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
  * @throws {TypeError} If `callback` is not a function.
  */
 export async function attemptAsync(callback, ...args) {
@@ -248,9 +290,9 @@ export async function attemptAsync(callback, ...args) {
  * @template T
  * @param {(...any) => T} callback The function to execute.
  * @param {(...any)} args Arguments to pass to the callback function.
- * @returns {AttemptResult<T, AnyError|null>} A tuple:
- * - `[result, null]` on success, where `result` is the value of `T`.
- * - `[null, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
+ * @returns {AttemptResult<T, AnyError|NONE>} A tuple:
+ * - `[result, NONE]` on success, where `result` is the value of `T`.
+ * - `[NONE, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
  * @throws {TypeError} If `callback` is not a function or is an async function.
  */
 export function attemptSync(callback, ...args) {
@@ -274,9 +316,9 @@ export function attemptSync(callback, ...args) {
  *
  * @template T
  * @param {(...any) => T | PromiseLike<T>} callback The function to execute.
- * @returns {(...any) => Promise<AttemptResult<Awaited<T>|null, AnyError|null>>>} An async wrapped function that returns to a tuple:
- * - `[result, null]` on success, where `result` is the value of `T`.
- * - `[null, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
+ * @returns {(...any) => Promise<AttemptSuccess<Awaited<T>>|AttemptFailure<Error>>} A wrapped function that returns a tuple:
+ * - `[result, NONE]` on success, where `result` is the value of `T`.
+ * - `[NONE, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
  * @throws {TypeError} If `callback` is not a function.
  */
 export const createSafeAsyncCallback = callback => async (...args) => await attemptAsync(callback, ...args);
@@ -286,9 +328,9 @@ export const createSafeAsyncCallback = callback => async (...args) => await atte
  *
  * @template T
  * @param {(...any) => T} callback The function to execute.
- * @returns {(...any) => AttemptResult<T, AnyError|null>} A wrapped function that returns a tuple:
- * - `[result, null]` on success, where `result` is the value of `T`.
- * - `[null, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
+ * @returns {(...any) => AttemptSuccess<T>|AttemptFailure<Error>} A wrapped function that returns a tuple:
+ * - `[result, NONE]` on success, where `result` is the value of `T`.
+ * - `[NONE, Error]` on failure, where `Error` is the caught error (normalized to an Error object).
  * @throws {TypeError} If `callback` is not a function or is an async function.
  */
 export const createSafeSyncCallback = callback => (...args) => attemptSync(callback, ...args);
@@ -313,7 +355,7 @@ export const createSafeSyncCallback = callback => (...args) => attemptSync(callb
  *   failure?: (err: E) => V | PromiseLike<V>
  * 	 signal?: AbortSignal<R>
  * }} callbacks Handlers for success or failure cases.
- * @returns {Promise<AttemptResult<Awaited<U>|Awaited<V>, E>|AttemptFailure<R>} A Promise resolving to a new `AttemptResult` from the callback execution,
+ * @returns {Promise<AttemptSuccess<Awaited<U>|Awaited<V>, E>|AttemptFailure<R>} A Promise resolving to a new `AttemptResult` from the callback execution,
  * or a failure if the input is invalid.
  */
 export async function handleResultAsync(result, {
@@ -326,7 +368,7 @@ export async function handleResultAsync(result, {
 	} else if (typeof success !== 'function' || typeof failure !== 'function') {
 		throw new TypeError('Both success and failure handlers must be functions.');
 	} else if (signal instanceof AbortSignal && signal.aborted) {
-		return fail(signal.reason instanceof Error ? signal.reason : new Error(signal.reason));
+		return fail(signal.reason);
 	} else {
 		switch (getAttemptStatus(result)) {
 			case ATTEMPT_STATUSES.succeeded:
@@ -386,7 +428,7 @@ export async function attemptAll(...callbacks) {
 	if (callbacks.some(cb => typeof cb !== 'function')) {
 		throw new TypeError('All callbacks must be functions.');
 	} else {
-		let result = succeed(null);
+		let result = succeed(NONE);
 
 		for (const cb of callbacks) {
 			if (result[ATTEMPT_STATUS] === ATTEMPT_STATUSES.failed) {
@@ -407,10 +449,13 @@ export async function attemptAll(...callbacks) {
  * @throws {AnyError} The error if result is an `AttemptFailure`
  */
 export function throwIfFailed(result) {
-	if (failed(result)) {
-		throw getResultError(result);
+	if (result instanceof FailureTuple) {
+		throw result.error;
 	}
 }
 
 export const createSafeCallback = createSafeAsyncCallback;
 export const attempt = attemptAsync;
+
+// Aliased to avoid confusion with types
+export { SuccessTuple as AttemptSuccess, FailureTuple as AttemptFailure };
