@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+##
+
+## [v1.0.4] - 2025-08-05
+
+### Changed
+- Refactor to use `AttemptResult` & `AttemtFailure` classes extending `Array` for better type safety and clarity.
+- Improved type definitions for `AttemptSuccess` and `AttemptFailure`.
+
 ## [v1.0.3] - 2025-07-30
 
 ### Added
