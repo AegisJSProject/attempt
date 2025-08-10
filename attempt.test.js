@@ -1,10 +1,10 @@
 import '@shgysk8zer0/polyfills';
 import { describe, test } from 'node:test';
-import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail as failTest } from 'node:assert';
+import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail as failTest, doesNotThrow } from 'node:assert';
 import {
 	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded,
 	failed, isAttemptResult, getResultError, getResultValue, handleResultAsync, handleResultSync, throwIfFailed,
-	getAttemptStatus, SUCCEEDED, FAILED, attemptAll, AttemptSuccess, AttemptFailure,
+	getAttemptStatus, SUCCEEDED, FAILED, attemptAll, AttemptSuccess, AttemptFailure, AttemptResult,
 } from './attempt.js';
 
 describe('Test `attempt` library', async () => {
@@ -39,6 +39,9 @@ describe('Test `attempt` library', async () => {
 		const aborted = fail(sig);
 		const abortedStr = fail(AbortSignal.abort('failed'));
 
+		throws(() => new AttemptResult('true', 'false', false), 'Should not be able to construct `AttemptResult` directly.');
+		ok(good.ok, 'Successful results should have `ok` set to `true`.');
+		ok(! bad.ok, 'Failed results should have `ok` set to `false`.');
 		ok(good instanceof AttemptSuccess, '`succeed()` should return an `AttemptSuccess` object/tuple.');
 		ok(bad instanceof AttemptFailure, '`fail()` should return an `AttemptFailure` object/tuple.');
 		deepStrictEqual(getResultError(invalid), new TypeError('Invalid error type provided.'), 'Should return a TypeError for invalid error types.');
@@ -72,9 +75,11 @@ describe('Test `attempt` library', async () => {
 
 	test('Test return tuples.', { signal }, () => {
 		const msg = 'Hello, World!';
-		const [result1, error1] = attemptSync(returns, msg);
-		const [result2, error2] = attemptSync(err, 'I should throw');
+		const [result1, error1, passed1] = attemptSync(returns, msg);
+		const [result2, error2, passed2] = attemptSync(err, 'I should throw');
 
+		ok(passed1, '3rd element should be a boolean and `true` on successful attempts.');
+		ok(! passed2, '3rd element should be a boolean and `false` on failed attempts.');
 		strictEqual(error1, null, 'Successful path should not return an error.');
 		strictEqual(result1, msg, 'Returned result should match expectations.');
 		strictEqual(result2, null, 'Failed attempts should not return a value.');
@@ -147,6 +152,11 @@ describe('Test `attempt` library', async () => {
 	test('Test synchronously handling results', { signal }, async () => {
 		const result = succeed('Successful results should be handled by `success` handler.');
 		const err = fail(new TypeError('Failed results should be handled by `failure` handler.'));
+
+		doesNotThrow(() => handleResultSync(result, {
+			success: value => strictEqual(value, 'Successful results should be handled by `success` handler.', 'Should handle successful results with `success` handler.'),
+			failure: () => failTest('Failed test triggered success branch of handler.'),
+		}), 'Should not throw when handling a successful result.');
 
 		throws(() => handleResultSync(['invalid']), 'Invalid results should throw a TypeError.');
 		throws(() => handleResultSync(result, { success: null }), 'Invalid success callback should throw a TypeError.');
