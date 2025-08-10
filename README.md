@@ -2,7 +2,7 @@
 
 Run synchronous and asynchronous code without throwing errors.
 
-This is a *tiny* (about 750 bytes when minified & gzipped) library to help avoid `try / catch` and uncaught errors.
+This is a *tiny* (about 1kb when minified & gzipped) library to help avoid `try / catch` and uncaught errors.
 It has 100% test coverage and extensive JSDocs.
 
 [![CodeQL](https://github.com/AegisJSProject/attempt/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/AegisJSProject/attempt/actions/workflows/codeql-analysis.yml)
@@ -33,7 +33,7 @@ It has 100% test coverage and extensive JSDocs.
 
 ## Bulletproof Error Handling for Modern JavaScript
 
-**Tiny footprint, maximum utility.** At under 1KB, this library provides comprehensive error handling without bloating your bundle - essential for performance-critical applications.
+**Tiny footprint, maximum utility.** At ~1KB, this library provides comprehensive error handling without bloating your bundle - essential for performance-critical applications.
 
 **Zero runtime overhead for success cases.** Unlike try-catch blocks that require stack unwinding, successful operations return immediately with lightweight frozen tuples.
 
@@ -62,7 +62,7 @@ npm i @aegisjsproject/attempt
 <script type="importmap">
   {
     "imports": {
-      "@aegisjsproject/attempt": "https://unpkg.com/@aegisjsproject/attempt@1.0.3/attempt.min.js"
+      "@aegisjsproject/attempt": "https://unpkg.com/@aegisjsproject/attempt@1.0.5/attempt.min.js"
     }
   }
 </script>
@@ -77,8 +77,8 @@ npm i @aegisjsproject/attempt
 | **`createSafeAsyncCallback(fn)`**                     | Decorates any function once → returns a proxy that **always** yields `Promise<[value, error]>`.      |
 | **`createSafeSyncCallback(fn)`**                      | Decorates a *sync* function → returns a proxy that yields `[value, error]`.                          |
 | **`createSafeCallback`**                              | Alias of `createSafeAsyncCallback`.                                                                  |
-| **`succeed(value)`**                                  | Force a frozen `[value, null]` tuple.                                                                |
-| **`fail(err)`**                                       | Force a frozen `[null, Error]` tuple (normalises non‑Error throws).                                  |
+| **`succeed(value)`/`ok(value)`**                      | Force a frozen `[value, null]` tuple.                                                  |
+| **`fail(err)`/`err(error)`**                          | Force a frozen `[null, Error]` tuple (normalises non‑Error throws).                                  |
 | **`isAttemptResult(result)`**                         | Checks is a value is a valid `[value, error]` tuple as created by `succeed()` or `fail()`.           |
 | **`succeeded(result)`**                               | Checks is a value is a valid `[value, null]` tuple as created by `succeed()`.                        |
 | **`failed(result)`**                                  | Checks is a value is a valid `[null, error]` tuple as created by `fail()`.                           |
@@ -116,7 +116,33 @@ if (succeeded(result)) {
 }
 ```
 
-### With desctructuring of `[val, err]`
+### `AttemptResult` in more tradtional OOP style
+
+```js
+import { attemptSync } from '@aegisjsproject/attempt';
+
+const unsafeFunction = (num) => {
+  if (num > 0.5) {
+    throw new RangeError(`${num} is greater than 0.5`);
+  } else {
+    return num;
+  }
+};
+
+const result = attemptSync(unsafeFunction, Math.random());
+
+if (result.ok) {
+  // result.value is the return value of the function
+  const num = result.value;
+  // Handle result value
+} else {
+  // result.error is an Error instance
+  const err = result.error;
+  // Handle result error
+}
+```
+
+### With destructuring of `[val, err]` or `{ value, error }`
 
 Since an `AttemptResult` is a frozen tuple of `[val, err]`, you also have the option to just destructure
 it and handle results in what may be a more familiar or convenient way.
@@ -146,8 +172,9 @@ const safeFetch = createSafeAsyncCallback(async (url, init) => {
 
 const [num, err] = safeFunction(Math.random()); // 50% chance of throwing, but it'll return the error instead
 safeParse('{Invalid JSON}');
+const { value, error, status, ok } = await safeFetch('/api', { method: 'GET' });
 
-const [value, error] = await attemptAsync(fetch, '/api', { signal: AbortSignal.abort('Request cancelled') });
+const [value, error, ok] = await attemptAsync(fetch, '/api', { signal: AbortSignal.abort('Request cancelled') });
 if (error) { … }           // always an Error instance
 else       { …value… }     // may be any value (even null/undefined)
 ```

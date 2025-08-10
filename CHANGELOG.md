@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.5] - 2025-08-10
+
+### Added
+- Add `ok` property to result tuple, including as 3rd element 
+
+### Removed
+- No longer set internal status property in results
+
 ## [v1.0.4] - 2025-08-05
 
 ### Changed
