@@ -39,6 +39,9 @@ describe('Test `attempt` library', async () => {
 		const aborted = fail(sig);
 		const abortedStr = fail(AbortSignal.abort('failed'));
 
+		strictEqual(good.toString(), '[object AttemptSuccess]', '`AttemptSuccess should stringify as the correct object type.');
+		strictEqual(bad.toString(), '[object AttemptFailure]', '`AttemptFailure should stringify as the correct object type.');
+
 		throws(() => new AttemptResult('true', 'false', false), 'Should not be able to construct `AttemptResult` directly.');
 		ok(good.ok, 'Successful results should have `ok` set to `true`.');
 		ok(! bad.ok, 'Failed results should have `ok` set to `false`.');

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.6] - 2025-08-13
+
+### Added
+- Add `Symbol.toStringTag` getters for `AttemptSuccess` & `AttemptFailure`, and `toString()` on `AttemptResult`
+
+### Changed
+- Refactor `attemptAll()` to simplify & improve performance
+
 ## [v1.0.5] - 2025-08-10
 
 ### Added
