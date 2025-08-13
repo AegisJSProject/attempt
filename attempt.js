@@ -47,6 +47,10 @@ class ResultTuple extends Array {
 		Object.freeze(this);
 	}
 
+	toString() {
+		return `[object ${this[Symbol.toStringTag]}]`;
+	}
+
 	/**
 	 * @returns {Error|NONE}
 	 */
@@ -97,6 +101,10 @@ class SuccessTuple extends ResultTuple {
 		super(value, NONE, true);
 	}
 
+	get [Symbol.toStringTag]() {
+		return 'AttemptSuccess';
+	}
+
 	/**
 	 * @returns {SUCCEEDED}
 	 */
@@ -129,6 +137,10 @@ class FailureTuple extends ResultTuple {
 		} else {
 			super(NONE, error.reason, false);
 		}
+	}
+
+	get [Symbol.toStringTag]() {
+		return 'AttemptFailure';
 	}
 
 	/**
@@ -433,17 +445,16 @@ export async function attemptAll(...callbacks) {
 	if (callbacks.some(cb => typeof cb !== 'function')) {
 		throw new TypeError('All callbacks must be functions.');
 	} else {
-		let result = succeed(NONE);
-
-		for (const cb of callbacks) {
-			if (result instanceof FailureTuple) {
-				break;
-			} else {
-				result = await attemptAsync(cb, result[VALUE_INDEX]);
-			}
-		}
-
-		return result;
+		return await callbacks.reduce(
+			/**
+			 * @template  T,R
+			 * @param {Promise<T>} promise
+			 * @param {(T) => R|PromiseLike<R>} callback
+			 * @returns {Promise<R>}
+			 */
+			(promise, callback) => promise.then(callback),
+			Promise.resolve(NONE),
+		).then(succeed, fail);
 	}
 }
 
