@@ -79,7 +79,7 @@
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
     "@shgysk8zer0/eslint-config": "^1.0.4",
-    "@shgysk8zer0/polyfills": "^0.5.0",
+    "@shgysk8zer0/polyfills": "^0.6.0",
     "eslint": "^9.31.0",
     "rollup": "^4.45.1"
   }
