@@ -4,9 +4,19 @@ const ERROR_INDEX = 1;
 
 const OK_INDEX = 2;
 
-export const NONE = null;
+/**
+ * @type {unique symbol}
+ */
+export const NONE = Symbol('attempt:value:none');
 
+/**
+ * @type {unique symbol}
+ */
 export const SUCCEEDED = Symbol('attempt:status:succeeded');
+
+/**
+ * @type {unique symbol}
+ */
 export const FAILED = Symbol('attempt:status:failed');
 
 /**
@@ -27,7 +37,7 @@ export const ATTEMPT_STATUSES = Object.freeze({
 
 /**
  * @template T
- * @template E
+ * @template {AnyError} E
  * @typedef {AttemptSuccess<T> | AttemptFailure<E>} AttemptResult<T, E>
  * Union type for both possible attempt outcomes.
  */
@@ -37,7 +47,7 @@ class ResultTuple extends Array {
 	 * @param {E} error
 	 * @param {boolean} ok
 	 */
-	constructor(value, error, ok) {
+	constructor(value, error, ok = value !== NONE) {
 		if (new.target === ResultTuple) {
 			throw new TypeError('Cannot construct `ResultTuple` instances directly. Use `succeed()` or `fail()` instead.');
 		}
@@ -45,6 +55,10 @@ class ResultTuple extends Array {
 		super(value, error, ok);
 
 		Object.freeze(this);
+	}
+
+	get [Symbol.toStringTag]() {
+		return 'ResultTuple';
 	}
 
 	toString() {
@@ -98,7 +112,11 @@ class SuccessTuple extends ResultTuple {
 	 * @param {T} value
 	 */
 	constructor(value) {
-		super(value, NONE, true);
+		if (value === NONE) {
+			throw new TypeError('Cannot succeed with `NONE` as value.');
+		} else {
+			super(value, NONE, true);
+		}
 	}
 
 	get [Symbol.toStringTag]() {
@@ -115,7 +133,7 @@ class SuccessTuple extends ResultTuple {
 
 /**
  * @template E
- * * @typedef {readonly [NONE, E, false] & { value: NONE, error: E, status: typeof FAILED, ok: false }} AttemptFailure
+ * @typedef {readonly [NONE, E, false] & { value: NONE, error: E, status: typeof FAILED, ok: false }} AttemptFailure
  * Represents a failed outcome tuple with hidden metadata. Named differently in class to avoid JSDocs confusion.
  */
 class FailureTuple extends ResultTuple {
@@ -124,7 +142,9 @@ class FailureTuple extends ResultTuple {
 	 * @param {E} error
 	 */
 	constructor(error) {
-		if (typeof error === 'string') {
+		if (error === NONE) {
+			throw new TypeError('Cannot fail with `NONE` as error.');
+		} else if (typeof error === 'string') {
 			super(NONE, new Error(error), false);
 		} else if (Error.isError(error)) {
 			super(NONE, error, false);
@@ -132,10 +152,10 @@ class FailureTuple extends ResultTuple {
 			super(NONE, new TypeError('Invalid error type provided.'), false);
 		} else if (! error.aborted) {
 			super(NONE, new TypeError('Failed with a non-aborted `AbortSignal`.'), false);
-		} else if (typeof error.reason === 'string') {
-			super(NONE, new Error(error.reason), false);
-		} else {
+		} else if (Error.isError(error.reason)) {
 			super(NONE, error.reason, false);
+		} else {
+			super(NONE,  new Error(error.reason), false);
 		}
 	}
 
@@ -182,6 +202,13 @@ export const isAttemptResult = result => result instanceof ResultTuple;
  * @returns {result is AttemptSuccess}
  */
 export const succeeded = result => result instanceof SuccessTuple;
+
+/**
+ *
+ * @param {any} val The value to check
+ * @returns {boolean} If the value is `NONE`
+ */
+export const isNone = val => val === NONE;
 
 /**
  * Returns `true` if the given result is a failed AttemptResult.
@@ -231,6 +258,24 @@ export function fail(err) {
 }
 
 /**
+ *
+ * @template T
+ * @template {AnyError} E
+ * @param {AttemptResult<T, E>} result
+ * @returns {T}
+ * @throws {E}
+ */
+export function unwrap(result) {
+	if (! (result instanceof ResultTuple)) {
+		throw new TypeError('Cannot unwrap a non-Result object.');
+	} else if (result.ok) {
+		return result[VALUE_INDEX];
+	} else {
+		throw result[ERROR_INDEX];
+	}
+}
+
+/**
  * Extracts the value from a successful `AttemptResult`.
  *
  * @template T
@@ -240,7 +285,7 @@ export function fail(err) {
  */
 export function getResultValue(result) {
 	if (result instanceof SuccessTuple) {
-		return result.value;
+		return result[VALUE_INDEX];
 	} else {
 		throw new TypeError('Result must be an `AttemptSuccess` tuple.');
 	}
@@ -256,7 +301,7 @@ export function getResultValue(result) {
  */
 export function getResultError(result) {
 	if (result instanceof FailureTuple){
-		return result.error;
+		return result[ERROR_INDEX];
 	} else {
 		throw new TypeError('Result must be an `AttemptFailure` tuple.');
 	}
@@ -295,7 +340,7 @@ export async function attemptAsync(callback, ...args) {
 	if (typeof callback !== 'function') {
 		throw new TypeError('callback must be a function.');
 	} else {
-		return await Promise.try(callback, ...args).then(succeed).catch(fail);
+		return await Promise.try(callback, ...args).then(succeed, fail);
 	}
 }
 
@@ -322,7 +367,7 @@ export function attemptSync(callback, ...args) {
 		try {
 			const result = callback(...args);
 
-			return succeed(result);
+			return result instanceof Promise ? result.then(succeed, fail) : succeed(result);
 		} catch(err) {
 			return fail(err);
 		}
@@ -438,6 +483,7 @@ export function handleResultSync(result, {
 /**
  * Attempts to execute multiple callbacks sequentially, passing the result of each callback to the next.
  *
+ * @template  T,R
  * @param  {...Function} callbacks
  * @returns {Promise<AttemptSuccess<any>|AttemptFailure<Error>>}
  */
@@ -447,7 +493,6 @@ export async function attemptAll(...callbacks) {
 	} else {
 		return await callbacks.reduce(
 			/**
-			 * @template  T,R
 			 * @param {Promise<T>} promise
 			 * @param {(T) => R|PromiseLike<R>} callback
 			 * @returns {Promise<R>}
@@ -460,7 +505,7 @@ export async function attemptAll(...callbacks) {
 
 /**
  * Throws the error if `result` is an `AttemptFailure`.
- *
+ * @template E
  * @param {AttemptResult<any, E>} result The result tuple
  * @throws {E} The error if result is an `AttemptFailure`
  */
