@@ -1,4 +1,3 @@
-import '@shgysk8zer0/polyfills';
 import { describe, test } from 'node:test';
 import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail as failTest, doesNotThrow } from 'node:assert';
 import {
