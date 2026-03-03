@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Update to node 25.3.0
+
+### Removed
+-Remove `@shgysk8zer0/polyfills` as dev dependency (supported by node 25.3.0)
+
 ## [v1.0.7] - 2026-03-03
 
 ### Added
