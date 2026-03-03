@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.7] - 2026-03-03
+
+### Added
+- Added `isNone()` and `unwrap(result)` utility functions
+
+### Changed
+- Changed `NONE` to a unique `Symbol`, making it distinct from `succeed(null)`
+
 ## [v1.0.6] - 2025-08-13
 
 ### Added

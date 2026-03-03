@@ -2,9 +2,9 @@ import '@shgysk8zer0/polyfills';
 import { describe, test } from 'node:test';
 import { ok, strictEqual, doesNotReject, rejects, throws, deepStrictEqual, fail as failTest, doesNotThrow } from 'node:assert';
 import {
-	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded,
+	attemptAsync, attemptSync, createSafeSyncCallback, createSafeAsyncCallback, succeed, fail, succeeded, unwrap,
 	failed, isAttemptResult, getResultError, getResultValue, handleResultAsync, handleResultSync, throwIfFailed,
-	getAttemptStatus, SUCCEEDED, FAILED, attemptAll, AttemptSuccess, AttemptFailure, AttemptResult,
+	getAttemptStatus, SUCCEEDED, FAILED, attemptAll, AttemptSuccess, AttemptFailure, AttemptResult, NONE, isNone,
 } from './attempt.js';
 
 describe('Test `attempt` library', async () => {
@@ -44,6 +44,8 @@ describe('Test `attempt` library', async () => {
 
 		throws(() => new AttemptResult('true', 'false', false), 'Should not be able to construct `AttemptResult` directly.');
 		ok(good.ok, 'Successful results should have `ok` set to `true`.');
+		ok(isNone(good.error), 'Success results should have `NONE` for error.');
+		ok(isNone(bad.value), 'Failed results should have `NONE` for value.');
 		ok(! bad.ok, 'Failed results should have `ok` set to `false`.');
 		ok(good instanceof AttemptSuccess, '`succeed()` should return an `AttemptSuccess` object/tuple.');
 		ok(bad instanceof AttemptFailure, '`fail()` should return an `AttemptFailure` object/tuple.');
@@ -71,8 +73,8 @@ describe('Test `attempt` library', async () => {
 		const [result2, err2] = fail('This should error.');
 
 		strictEqual(value, 'This should succeed.', '`succeed()` should have the expected result.');
-		strictEqual(error, null, '`succeed()` should not return an error.');
-		strictEqual(result2, null, '`fail()` should not return a result.');
+		strictEqual(error, NONE, '`succeed()` should not return an error.');
+		strictEqual(result2, NONE, '`fail()` should not return a result.');
 		ok(err2 instanceof Error, '`fail()` should return an error.');
 	});
 
@@ -83,10 +85,19 @@ describe('Test `attempt` library', async () => {
 
 		ok(passed1, '3rd element should be a boolean and `true` on successful attempts.');
 		ok(! passed2, '3rd element should be a boolean and `false` on failed attempts.');
-		strictEqual(error1, null, 'Successful path should not return an error.');
+		strictEqual(error1, NONE, 'Successful path should not return an error.');
 		strictEqual(result1, msg, 'Returned result should match expectations.');
-		strictEqual(result2, null, 'Failed attempts should not return a value.');
+		strictEqual(result2, NONE, 'Failed attempts should not return a value.');
 		ok(error2 instanceof Error, 'Failed attempts should return an error.');
+	});
+
+	test('Test unwrapping of results.', { signal }, () => {
+		const err = new Error('Failed');
+		const passed = succeed('success');
+		const failed = fail(err);
+		throws(() => unwrap(failed), 'Failed results should throw when unwrapped.');
+		doesNotThrow(() => unwrap(passed), 'Successful results should not throw when unwrapped.');
+		strictEqual(unwrap(passed), passed.value, 'Unwrapping should return the value.');
 	});
 
 	test('`attemptAsync()` should throw if callback is not a function.', { signal }, async () => {
@@ -105,8 +116,8 @@ describe('Test `attempt` library', async () => {
 		const [failed, error] = parse('{Invalid JSON}');
 
 		deepStrictEqual(parsed, data, 'Safe callbacks should return expected results.');
-		strictEqual(err, null, 'Successfull callbacks should not return an error.');
-		strictEqual(failed, null, 'Errored callbacks should not return results.');
+		strictEqual(err, NONE, 'Successfull callbacks should not return an error.');
+		strictEqual(failed, NONE, 'Errored callbacks should not return results.');
 		ok(error instanceof Error, 'Failed callbacks should return an error.');
 	});
 
@@ -117,8 +128,8 @@ describe('Test `attempt` library', async () => {
 		const [failed, error] = await parse('{Invalid JSON}');
 
 		deepStrictEqual(parsed, data, 'Safe callbacks should return expected results.');
-		strictEqual(err, null, 'Successfull callbacks should not return an error.');
-		strictEqual(failed, null, 'Errored callbacks should not return results.');
+		strictEqual(err, NONE, 'Successfull callbacks should not return an error.');
+		strictEqual(failed, NONE, 'Errored callbacks should not return results.');
 		ok(error instanceof Error, 'Failed callbacks should return an error.');
 		throws(() => throwIfFailed(handleResultSync(err, {})), 'Default error handle should return an `AttemptFailure`.');
 	});
